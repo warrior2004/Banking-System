@@ -9,4 +9,7 @@ router.post("/register", authController.userRegisterController)
 /* POST /api/auth/login */
 router.post("/login", authController.userLoginController)
 
+// Define the POST route
+router.post('/register-system-user', authController.registerSystemUserController);
+
 module.exports = router
