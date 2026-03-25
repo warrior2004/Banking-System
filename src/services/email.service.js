@@ -11,57 +11,69 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-// Verify the connection configuration
-transporter.verify((error, success) => {
-    if (error) {
-        console.error('Error connecting to email server:', error);
-    } else {
-        console.log('Email server is ready to send messages');
-    }
-});
-
-
-// Function to send email
-const sendEmail = async (to, subject, text, html) => {
+/**
+ * Generic internal sender
+ * Improved with a "fire and forget" safe wrapper
+ */
+const sendEmail = async (options) => {
     try {
-        const info = await transporter.sendMail({
-            from: `"Banking System" <${process.env.EMAIL_USER}>`, // sender address
-            to, // list of receivers
-            subject, // Subject line
-            text, // plain text body
-            html, // html body
-        });
-
-        console.log('Message sent: %s', info.messageId);
-        console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
+        const mailOptions = {
+            from: `"Banking System Support" <${process.env.EMAIL_USER}>`,
+            ...options
+        };
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`Email Sent: ${info.messageId}`);
+        return info;
     } catch (error) {
-        console.error('Error sending email:', error);
+        // In a real bank, you'd log this to a service like Sentry or Winston
+        console.error('CRITICAL: Email Delivery Failed:', error.message);
     }
 };
 
+/**
+ * Helper to generate a consistent HTML wrapper
+ */
+const emailTemplate = (content) => `
+    <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;">
+        <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">Banking System</h2>
+        <div style="color: #333; line-height: 1.6;">${content}</div>
+        <footer style="margin-top: 20px; font-size: 12px; color: #888;">
+            This is an automated message. Please do not reply.
+        </footer>
+    </div>
+`;
 
 async function sendRegistrationEmail(userEmail, name) {
-    const subject = 'Welcome to Banking System!';
-    const text = `Hello ${name},\n\nThank you for registering at Banking System. We're excited to have you on board!\n\nBest regards,\nThe Banking System Team`;
-    const html = `<p>Hello ${name},</p><p>Thank you for registering at Banking System. We're excited to have you on board!</p><p>Best regards,<br>The Banking System Team</p>`;
-
-    await sendEmail(userEmail, subject, text, html);
+    const html = emailTemplate(`
+        <p>Hello <strong>${name}</strong>,</p>
+        <p>Welcome! Your account has been successfully created. You can now start managing your funds securely.</p>
+    `);
+    
+    // We don't necessarily need to await this in the controller
+    return sendEmail({ to: userEmail, subject: 'Welcome!', html });
 }
 
 async function sendTransactionEmail(userEmail, name, amount, toAccount) {
-    const subject = 'Transaction Successful!';
-    const text = `Hello ${name},\n\nYour transaction of $${amount} to account ${toAccount} was successful.\n\nBest regards,\nThe Banking System Team`;
-    const html = `<p>Hello ${name},</p><p>Your transaction of $${amount} to account ${toAccount} was successful.</p><p>Best regards,<br>The Banking System Team</p>`;
+    const html = emailTemplate(`
+        <p>Hello ${name},</p>
+        <p style="background: #f9f9f9; padding: 15px; border-radius: 5px;">
+            <strong>Amount:</strong> $${amount}<br>
+            <strong>To Account:</strong> ${toAccount}<br>
+            <strong>Status:</strong> <span style="color: green;">Successful</span>
+        </p>
+    `);
 
-    await sendEmail(userEmail, subject, text, html);
+    return sendEmail({ to: userEmail, subject: 'Transaction Confirmation', html });
 }
 
 async function sendTransactionFailureEmail(userEmail, name, amount, toAccount) {
-    const subject = 'Transaction Failed';
-    const text = `Hello ${name},\n\nWe regret to inform you that your transaction of $${amount} to account ${toAccount} has failed. Please try again later.\n\nBest regards,\nThe Banking System Team`;
-    const html = `<p>Hello ${name},</p><p>We regret to inform you that your transaction of $${amount} to account ${toAccount} has failed. Please try again later.</p><p>Best regards,<br>The Banking System Team</p>`;
+    const html = emailTemplate(`
+        <p>Hello ${name},</p>
+        <p>Your attempt to send <strong>$${amount}</strong> to account <strong>${toAccount}</strong> failed.</p>
+        <p>Please check your balance or contact support if the issue persists.</p>
+    `);
 
-    await sendEmail(userEmail, subject, text, html);
+    return sendEmail({ to: userEmail, subject: 'Alert: Transaction Failed', html });
 }
 
 module.exports = {
